@@ -1,10 +1,14 @@
 # BEGIN Functions for calculating the likelihood grid
-def calculate_likelihoods(NX, K, dT, l1, l2,th,p0_p,p0_xi,xx):
+def calculate_likelihoods(NX, K, dT, l1, l2,th):
     from scipy.special import comb
     from scipy.stats import norm
     import numpy as np
 
-    print('calculate_likelihoods')
+    xx = [i for i in np.linspace(0,1,NX)]
+    yy= [norm.cdf(l1*norm.ppf(xi)+l2) for xi in xx]
+    p0_p = np.diff(yy)
+    p0_xi = [x+0.5/NX for x in xx[:-1]]
+            
     Pk1k2 = [[0]*(K+1) for k in range(K+1)]
     for k1 in range(K+1):
         comb1 = comb(K,k1)
@@ -23,11 +27,11 @@ def calculate_likelihoods(NX, K, dT, l1, l2,th,p0_p,p0_xi,xx):
             Pk1k2[k1][k2] = comb1*comb(K,k2)*total
     return Pk1k2
 
-def calculate_likelihoods_par(th):
+#def calculate_likelihoods_par(th):
     # this function is used only to parallelize
-    global NX, K, dT, l1, l2,p0_p,p0_xi,xx
-    print(NX)
-    return calculate_likelihoods(NX, K, dT, l1, l2,th,p0_p,p0_xi,xx)
+#    global NX, K, dT, l1, l2,p0_p,p0_xi,xx # K
+#    print(K)
+#    return calculate_likelihoods(NX, K, dT, l1, l2,th,p0_p,p0_xi,xx)
 
 def loop_calculate_likelihoods(NX, K, dT, Lambdas1, Lambdas2,Thetas):
     # now Lambdas1,Lambdas2,Thetas must be lists
@@ -50,17 +54,18 @@ def loop_calculate_likelihoods(NX, K, dT, Lambdas1, Lambdas2,Thetas):
     workdir = os.getcwd()
     print(workdir)
     dv.apply_sync(os.chdir,workdir )
+    
 
-    xx = [i for i in np.linspace(0,1,NX)]
     for l1 in Lambdas1:
         for l2 in Lambdas2:
-            yy= [norm.cdf(l1*norm.ppf(xi)+l2) for xi in xx]
-            p0_p = np.diff(yy)
-            p0_xi = [x+0.5/NX for x in xx[:-1]]
+            
+            pr_list = dv.map_sync(calculate_likelihoods, [NX]*len(Thetas),[K]*len(Thetas),[dT]*len(Thetas),[l1]*len(Thetas),[l2]*len(Thetas),Thetas)
             # send information to the workers
-            dv.push(dict(NX=NX,K=K,l1=l1,l2=l2,dT=dT,p0_p=p0_p,p0_xi=p0_xi,xx=xx))
-
-            pr_list = dv.map_sync(calculate_likelihoods_par, Thetas)
+            #print(dv.push(dict(NX=NX,K=K,l1=l1,l2=l2,dT=dT,p0_p=p0_p,p0_xi=p0_xi,xx=xx) ,block=True )) 
+            #print('pushed it')
+            #print(dv.pull('K', block=True))
+            #pr_list = dv.map_sync(calculate_likelihoods_par, Thetas)
+            #dv[0].apply(calculate_likelihoods_par,Thetas[0],{'NX':NX,'K':K,'l1':l1,'l2':l2})#,dT=dT,p0_p=p0_p,p0_xi=p0_xi,xx=xx))
 
             for Pk1k2,th in zip(pr_list,Thetas):
                 np.savetxt('Pk1k2_K%d_dT%d_%02d_%02d_%02d_n%d.txt' %(K,dT,1000*l1,1000*l2,th,NX) , Pk1k2, delimiter=' ', newline='\n', header='Likelihood Pr_{k_1,k_2}(k_1,k_2 |dT,l1,l2,th), with K=%d,dT=%d,NX=%d l1=%0.5f,l2=%0.5f,theta=%d'%(K,dT,NX, l1, l2, th), comments='# ')
