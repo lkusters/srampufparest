@@ -23,6 +23,7 @@ def loglikelihood_temperature(hist2D,bins1,bins2,dT,NX, l1, l2,theta):
     # input is 2D histogram of observed ones
     # output is loglikelihood
     import numpy as np
+    from scipy.special import comb
     
     K = max(bins1)
     L = max(bins2)
@@ -38,7 +39,7 @@ def loglikelihood_temperature(hist2D,bins1,bins2,dT,NX, l1, l2,theta):
                             in zip(p1_p, p1_xi) ]) # inner integral
                 int1 = int1 + p1*(xi1**k)*((1-xi1)**(K-k)) * int2
 
-            logll = logll + count*np.log10( int1) 
+            logll = logll + count*np.log10(comb(K,k)*comb(L,l)* int1) 
     
     return logll
 
@@ -48,12 +49,13 @@ def loglikelihood(hist,bins,NX, l1, l2):
     # input is histogram of observed ones
     # output is loglikelihood
     import numpy as np
+    from scipy.special import comb
     
     K = max(bins)
     p0_p, p0_xi = pdfp0(l1,l2,NX)
     
-    logll = sum([count*np.log10(sum([p0*(xi**k)*((1-xi)**(K-k)) for p0,xi \
-                                     in zip(p0_p, p0_xi)])) \
+    logll = sum([count*np.log10(comb(K,k)*sum([p0*(xi**k)*((1-xi)**(K-k))\
+                                     for p0,xi in zip(p0_p, p0_xi)])) \
             for (count,k) in zip(hist,bins)])
             
     return logll
@@ -198,14 +200,14 @@ def getcounts1D(observations):
     # then return the histogram of ones
     
     K = len(observations[0]) # number of observations per cell
-    bins = [i for i in range(K+1)]
+    centerpoints = [i for i in range(K+1)]
     bin_edges = [i-0.5 for i in range(K+2) ]
     import numpy as np
     hist, _ = np.histogram([sum(counts) for counts in observations],bins=bin_edges)
     print('Finished generating histogram, ' +\
           'with %d max observations '%K+\
           'and %d total cells'%sum(hist) )
-    return hist, bins
+    return hist, centerpoints
     
 def getcounts2D(observations1,observations2):
     # observations1 : Ncells x Nobservations
@@ -218,8 +220,8 @@ def getcounts2D(observations1,observations2):
     K2 = len(observations2[0]) # number of observations per cell
     bins1 = [i for i in range(K1+1)]
     bins2 = [i for i in range(K2+1)]
-    x_edges = [i for i in range(K1+2)]
-    y_edges = [i for i in range(K2+2)]
+    x_edges = [i-0.5 for i in range(K1+2)]
+    y_edges = [i-0.5 for i in range(K2+2)]
     
     hist, _, _ = np.histogram2d([sum(counts) for counts in \
                                            observations1],\
