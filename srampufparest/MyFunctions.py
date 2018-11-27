@@ -23,7 +23,6 @@ def loglikelihood_temperature(hist2D,bins1,bins2,dT,NX, l1, l2,theta):
     # input is 2D histogram of observed ones
     # output is loglikelihood
     import numpy as np
-    from scipy.special import comb
     
     K = max(bins1)
     L = max(bins2)
@@ -39,7 +38,7 @@ def loglikelihood_temperature(hist2D,bins1,bins2,dT,NX, l1, l2,theta):
                             in zip(p1_p, p1_xi) ]) # inner integral
                 int1 = int1 + p1*(xi1**k)*((1-xi1)**(K-k)) * int2
 
-            logll = logll + count*np.log10(comb(K,k)*comb(L,l)* int1) 
+            logll = logll + count*np.log10(int1) 
     
     return logll
 
@@ -49,16 +48,52 @@ def loglikelihood(hist,bins,NX, l1, l2):
     # input is histogram of observed ones
     # output is loglikelihood
     import numpy as np
-    from scipy.special import comb
     
     K = max(bins)
     p0_p, p0_xi = pdfp0(l1,l2,NX)
     
-    logll = sum([count*np.log10(comb(K,k)*sum([p0*(xi**k)*((1-xi)**(K-k))\
+    logll = sum([count*np.log10(sum([p0*(xi**k)*((1-xi)**(K-k))\
                                      for p0,xi in zip(p0_p, p0_xi)])) \
             for (count,k) in zip(hist,bins)])
             
     return logll
+
+# -----------------------------------------------------------------------
+#   Generate expected distribution of sum-counts
+# -----------------------------------------------------------------------
+    
+def pmfpkones(NX, l1, l2, K):
+    # calculate the distribution of observing k ones of K observations
+    # , given l1,l2
+    # Accuracy of pdf estimation is NX
+    # output is pdf
+    from scipy.special import comb
+    
+    p0_p, p0_xi = pdfp0(l1,l2,NX)
+    
+    pmf = [comb(K,k)*sum([p0*(xi**k)*((1-xi)**(K-k))\
+                                     for p0,xi in zip(p0_p, p0_xi)]) \
+            for k in range(K+1)]
+            
+    return pmf,[i for i in range(K+1)]
+
+def pmfpkones_temperature(NX, dT, l1, l2, theta, p1, L):
+    # calculate the distribution of observing l ones of L observations
+    # , given l1,l2, theta, dT (temperature difference), p1 (one-probability)
+    # at the other temperature
+    # Accuracy of pdf estimation is NX
+    # output is pdf
+    # this should match one-probability distribution at T=T1+dT of all cells 
+    # that have one probability p1 at temperature T1
+    from scipy.special import comb
+    
+    p1_p, p1_xi = pdfp1(p1,dT,l1,l2,theta,NX)
+    
+    pmf = [comb(L,l)*sum([p0*(xi**l)*((1-xi)**(L-l))\
+                                     for p0,xi in zip(p1_p, p1_xi)]) \
+            for l in range(L+1)]
+            
+    return pmf,[i for i in range(L+1)]
 
 # -----------------------------------------------------------------------
 #   Calculate pdf
@@ -230,3 +265,8 @@ def getcounts2D(observations1,observations2):
     print('Finished generating 2D histogram, ' +\
           'with %d max observations K and %d max observations L '%(K1,K2) )
     return hist, bins1, bins2
+
+def getcellskones(observations,kones):
+    # return cell index of all cells that have k ones
+    idx = [i for i,counts in enumerate(observations) if sum(counts) == kones]
+    return idx
