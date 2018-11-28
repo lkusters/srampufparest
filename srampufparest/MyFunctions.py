@@ -178,14 +178,14 @@ def loop_loglikelihood_temperature(hist2D,bins1,bins2,dT,NX, Lambdas1, Lambdas2,
     dv = startworkers()
     
     LogLL = []
-    for l1 in Lambdas1:
+    for theta in Thetas:
         logll = []
-        for l2 in Lambdas2:
-            pr_list = dv.map_sync(loglikelihood_temperature, [hist2D]*len(Thetas), [bins1]*len(Thetas), [bins2]*len(Thetas), [dT]*len(Thetas), [NX]*len(Thetas), [l1]*len(Thetas), [l2]*len(Thetas),Thetas)
+        for l1 in Lambdas1:
+            pr_list = dv.map_sync(loglikelihood_temperature, [hist2D]*len(Lambdas2), [bins1]*len(Lambdas2), [bins2]*len(Lambdas2), [dT]*len(Lambdas2), [NX]*len(Lambdas2), [l1]*len(Lambdas2), Lambdas2,[theta]*len(Lambdas2))
             logll.append(pr_list)
         LogLL.append(logll)
-    print('Finished calculating log-likelihoods. Returning [L1 x L2 x Theta]'+\
-          ', [%d x %d x %d]'%(len(Lambdas1),len(Lambdas2),len(Thetas)))
+    print('Finished calculating log-likelihoods. Returning [Theta x L1 x L2]'+\
+          ', [%d x %d x %d]'%(len(Thetas),len(Lambdas1),len(Lambdas2)))
     return LogLL
 
   
@@ -227,7 +227,6 @@ def loadUnique(folderpath):
     print('returning observations [%d,%d,%d] '%np.shape(observations)+\
           'and merged observations [%d,%d]'%np.shape(mergedobservations))
     return observations,mergedobservations
-# END Functions for loading the data and data properties
 
 def getcounts1D(observations):
     # observations : Ncells x Nobservations
@@ -270,3 +269,57 @@ def getcellskones(observations,kones):
     # return cell index of all cells that have k ones
     idx = [i for i,counts in enumerate(observations) if sum(counts) == kones]
     return idx
+
+  
+# -----------------------------------------------------------------------
+#   Store log-likelihoods / Load log-likelihoods
+# -----------------------------------------------------------------------
+def writeloglikelihoods(filename,LL,NX,Lambdas1,Lambdas2,Thetas):
+    import numpy as np
+    if Thetas == None: # no theta, 2D array
+        np.savetxt(filename, LL, delimiter=' ', newline='\n', header=\
+                   'log-likelihood of observed sequences as function of l1,'+\
+                   'l2 , with\n'+\
+                   'NX = %d\nl1 = %s\nl2 = %s'%(NX,' '.join(map(str, Lambdas1)),
+                                                   ' '.join(map(str, Lambdas2))
+                                                   ), comments='# ')
+    else: # we have to store a 3D array
+        with open(filename, 'w') as outfile:
+            outfile.write(
+                    '# log-likelihood of observed sequences as funct'+\
+                    'ion of l1,l2 , with\n'+\
+                    '# NX = %d\n# l1= %s\n# l2= %s\n# theta= %s\n'%(NX,
+                    ' '.join(map(str, Lambdas1)),' '.join(map(str, Lambdas2)),
+                    ' '.join(map(str, Thetas)) ) )
+            count = 0
+            for slice_2d in LL:
+                outfile.write('# Theta = {0} \n'.format(Thetas[count]))
+                np.savetxt(outfile, slice_2d)
+                count+= 1;
+
+def readloglikelihoods(filename):
+    import numpy as np
+    LL = NX = Lambdas1 = Lambdas2 = Thetas = None
+    
+    with open(filename, 'r') as infile:
+        for i in range(10):
+            line = infile.readline()
+            if(line.startswith('# NX') ):
+                NX = int(line.split('=')[1])
+            elif(line.startswith('# l1') ):
+                Lambdas1 = line.split('=')[1]
+                Lambdas1 = [float(i) for i in Lambdas1.split(' ')[1::]]
+            elif(line.startswith('# l2') ):
+                Lambdas2 = line.split('=')[1]
+                Lambdas2 = [float(i) for i in Lambdas2.split(' ')[1::]]
+            elif(line.startswith('# theta') ):
+                Thetas = line.split('=')[1]
+                Thetas = [float(i) for i in Thetas.split(' ')[1::]]
+            elif(not(line.startswith('#')) ):
+                break
+    LL = np.loadtxt(filename)
+    if(Thetas != None):
+        LL = LL.reshape(len(Thetas),len(Lambdas1),len(Lambdas2))
+    
+    return LL,NX,Lambdas1,Lambdas2,Thetas
+    
