@@ -1,7 +1,7 @@
 from setuptools import setup
 
 setup(name='srampufparest',
-      version='1.0',
+      version='1.2',
       description='Python module for parameter estimation of SRAM-PUF model',
       url='',
       author='Lieneke',

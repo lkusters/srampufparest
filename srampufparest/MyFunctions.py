@@ -17,44 +17,46 @@
 #            Pk1k2[k1][k2] = total
 #    return Pk1k2
 
-def loglikelihood_temperature(hist2D,bins1,bins2,dT,NX, l1, l2,theta):
+
+def loglikelihood_temperature(hist2D,binscK,binscL,dT,NX, l1, l2,theta):
     # calculate observations likelihood for two temperatures, 
     # given l1,l2, theta. Accuracy of pdf estimation is NX
     # input is 2D histogram of observed ones
     # output is loglikelihood
+    # pdfp1 is slower than power calculation so just do each pdfp1 once!
     import numpy as np
     
-    K = max(bins1)
-    L = max(bins2)
+    Kobs = max(binscK)
+    Lobs = max(binscL)
     p0_p, p0_xi = pdfp0(l1,l2,NX)
+    binscK = np.asarray(binscK)
+    binscL = np.asarray(binscL)
     
-    logll = 0
-    for (k,hist) in zip(bins1,hist2D):
-        for (l,count) in zip(bins2,hist):
-            int1 = 0
-            for (p1,xi1) in zip(p0_p, p0_xi):
-                (p1_p, p1_xi) = pdfp1(xi1,dT,l1,l2,theta,NX)
-                int2 = sum([(xi2**l)*((1-xi2)**(L-l))*p2 for (p2,xi2)\
-                            in zip(p1_p, p1_xi) ]) # inner integral
-                int1 = int1 + p1*(xi1**k)*((1-xi1)**(K-k)) * int2
-
-            logll = logll + count*np.log10(int1) 
+    TOTAL = [[0]*(Lobs+1)]*(Kobs+1)
+    for pxi0,xi0 in zip(p0_p, p0_xi):
+        p1_p, p1_xi = pdfp1(xi0,dT,l1,l2,theta,NX)
+        pKones = xi0**binscK*(1-xi0)**(Kobs-binscK)*pxi0
+        pLones = [sum(p1_xi**l*(1-p1_xi)**(Lobs-l)*p1_p) for l in binscL]
+        TOTAL += np.transpose(np.matlib.repmat(pKones,Lobs+1,1))*\
+        np.matlib.repmat(pLones,Kobs+1,1)
     
+    logll = sum(sum(np.log10(TOTAL)*np.asarray(hist2D)))
     return logll
+
 
 def loglikelihood(hist,bins,NX, l1, l2):
     # calculate observation likelihood for one temperature, given l1,l2
     # Accuracy of pdf estimation is NX
     # input is histogram of observed ones
     # output is loglikelihood
+    # note the strong relation with generateSRAMPUFkonesdistribution
     import numpy as np
     
     K = max(bins)
     p0_p, p0_xi = pdfp0(l1,l2,NX)
     
-    logll = sum([count*np.log10(sum([p0*(xi**k)*((1-xi)**(K-k))\
-                                     for p0,xi in zip(p0_p, p0_xi)])) \
-            for (count,k) in zip(hist,bins)])
+    logll = sum([count*np.log10(sum(p0_p*(p0_xi**k)*((1-p0_xi)**(K-k)) )) \
+                 for (count,k) in zip(hist,bins)])
             
     return logll
 
@@ -98,20 +100,22 @@ def pmfpkones_temperature(NX, dT, l1, l2, theta, p1, L):
 # -----------------------------------------------------------------------
 #   Calculate pdf
 # -----------------------------------------------------------------------
-    
 def pdfp0(l1,l2,NX):
     # p0 as defined in SRAM-PUF model documentation
     # parameters lambda1,lambda2 accuracy NX (approx stepsize 1/NX)
     import numpy as np
     from scipy.stats import norm
     
-    xx = [i for i in np.linspace(0,1,NX)]
-    yy= [norm.cdf(l1*norm.ppf(xi)+l2) for xi in xx]
-    p0_p = np.diff(yy)
-    p0_xi = [x+0.5/NX for x in xx[:-1]]
+    #xx = [i for i in np.linspace(0,1,NX)]
+    #yy= [norm.cdf(l1*norm.ppf(xi)+l2) for xi in xx]
+    #p0_p = np.diff(yy)
+    #p0_xi = [x+0.5/NX for x in xx[:-1]]
+    xi = [i for i in np.linspace(0,1,NX)]
+    p0_p = np.diff( norm.cdf(l1*norm.ppf(xi)+l2) )
+    p0_xi = xi[:-1]+np.diff(xi)/2
     
     return p0_p, p0_xi
-
+  
 def pdfp1(xi1,dT,l1,l2,th,NX):
     # p1(xi2|xi1,dT,..) as defined in SRAM-PUF model documentation
     # parameters lambda1,lambda2, theta accuracy NX (approx stepsize 1/NX)
@@ -119,10 +123,11 @@ def pdfp1(xi1,dT,l1,l2,th,NX):
     from scipy.stats import norm
     import numpy as np
     
-    xx = [i for i in np.linspace(0,1,NX)]
-    yy = [norm.cdf( (th/dT) * (norm.ppf(xi)-norm.ppf(xi1)) )   for xi in xx]
+    xi = [i for i in np.linspace(0,1,NX)]
+    xi1 = [xi1]*len(xi)
+    yy = norm.cdf( (th/dT) * (norm.ppf(xi)-norm.ppf(xi1)) )  
     p1_p = np.diff(yy)
-    p1_xi = [x+0.5/NX for x in xx[:-1]]
+    p1_xi = xi[:-1]+np.diff(xi)/2
     
     return p1_p, p1_xi
 
@@ -132,6 +137,11 @@ def pdfp1(xi1,dT,l1,l2,th,NX):
     
 def startworkers():
     # requires conda: ipcluster start -n 4
+    global srampuf_DV
+    if 'srampuf_DV' in globals():
+        print('workers have already been activated')
+        return srampuf_DV
+    
     try:
         from ipyparallel import Client
    
@@ -148,6 +158,7 @@ def startworkers():
         print('e.g. ipcluster start -n 4')
         raise
     
+    srampuf_DV = dv
     return dv
 
 def loop_loglikelihood(hist,bins,NX, Lambdas1, Lambdas2):
@@ -179,6 +190,7 @@ def loop_loglikelihood_temperature(hist2D,bins1,bins2,dT,NX, Lambdas1, Lambdas2,
     
     LogLL = []
     for theta in Thetas:
+        print('theta = {0}'.format(theta))
         logll = []
         for l1 in Lambdas1:
             pr_list = dv.map_sync(loglikelihood_temperature, [hist2D]*len(Lambdas2), [bins1]*len(Lambdas2), [bins2]*len(Lambdas2), [dT]*len(Lambdas2), [NX]*len(Lambdas2), [l1]*len(Lambdas2), Lambdas2,[theta]*len(Lambdas2))
@@ -322,4 +334,77 @@ def readloglikelihoods(filename):
         LL = LL.reshape(len(Thetas),len(Lambdas1),len(Lambdas2))
     
     return LL,NX,Lambdas1,Lambdas2,Thetas
+
+# -----------------------------------------------------------------------
+#   Generate synthetic data
+# -----------------------------------------------------------------------
     
+def generateSRAMPUFparameters(Ndevices,Ncells,l1,l2,theta):
+    # generate the model parameters M,D for Ndevices with Ncells
+    # l1 = sigma_N/Sigma_M
+    # l2 = (t-mu_M)/sigma_M
+    # theta = sigma_N/sigma_D
+    # assume sigma_N = 1 , and t = 0, then
+    import numpy as np
+    sigmaM = 1/l1;
+    muM = -l2/l1;
+    sigmaD = 1/theta;
+    
+    M = np.random.normal(loc=muM,scale=sigmaM,size=[Ndevices,Ncells])
+    D = np.random.normal(loc=0,scale=sigmaD,size=[Ndevices,Ncells])
+    print('Finished generating cell-parameters, ' +\
+          'with %d devices, and %d cells per device'%(Ndevices,Ncells) )
+    print('SETTINGS: mu_M = {0}, sigma_M = {1}'.format(muM,sigmaM))
+    print('SETTINGS: mu_D = {0}, sigma_D = {1}'.format(0,sigmaD))
+    return M,D
+
+def generateSRAMPUFobservations(M,D,Nobs,temperature):
+    # generate measurements for the SRAMPUFs with parameters M,D
+    # We have Nobs at temperature 
+    import numpy as np
+    sigmaN = 1
+    
+    samples = []
+    for Mdev,Ddev in zip(M,D): # loop devices
+        samplesdev = []
+        for m,d in zip(Mdev,Ddev):
+            samplesdev.append(
+                    [1 if (i+m+d*temperature)>=0 else 0 for i in 
+                     np.random.normal(loc=0,scale=sigmaN,
+                                      size=Nobs)   ]   )
+        samples.append(samplesdev)
+    # also generate merged observations
+    Ndevices = len(M)
+    Ncells = len(M[0])
+    merged = np.reshape(samples,(Ncells*Ndevices,Nobs))
+    
+    print('Finished generating %d cell-observations for each device'%(Nobs) )
+    print('SETTINGS: sigma_N = {0}'.format(sigmaN))
+    return samples,merged
+   
+def generateSRAMPUFkonesdistribution(Kobs,l1,l2,NX):
+    # generate synthetic histogram
+    from scipy.special import comb
+    
+    p0_p, p0_xi = pdfp0(l1,l2,NX)
+    binscK = [k for k in range(Kobs+1)]
+    pKones = [comb(Kobs,k)*sum(p0_xi**k*(1-p0_xi)**(Kobs-k)*p0_p) for k in binscK]
+    
+    return pKones,binscK
+    
+def generateSRAMPUFklonesdistribution(Kobs,Lobs,dT,l1,l2,theta,NX):
+    # generate synthetic histogram
+    from scipy.special import comb
+    import numpy as np
+    
+    p0_p, p0_xi = pdfp0(l1,l2,NX)
+    binscK = np.asarray([k for k in range(Kobs+1)])
+    binscL = np.asarray([l for l in range(Lobs+1)])
+    TOTAL = [[0]*(Lobs+1)]*(Kobs+1)
+    for pxi0,xi0 in zip(p0_p, p0_xi):
+        p1_p, p1_xi = pdfp1(xi0,dT,l1,l2,theta,NX)
+        pKones = comb(Kobs,binscK)*xi0**binscK*(1-xi0)**(Kobs-binscK)*pxi0
+        pLones = [comb(Lobs,l)*sum(p1_xi**l*(1-p1_xi)**(Lobs-l)*p1_p) for l in binscL]
+        TOTAL += np.transpose(np.matlib.repmat(pKones,Lobs+1,1))*\
+        np.matlib.repmat(pLones,Kobs+1,1)
+    return TOTAL,binscK,binscL
