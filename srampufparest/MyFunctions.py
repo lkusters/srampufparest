@@ -32,7 +32,7 @@ def loglikelihood_temperature(hist2D,binscK,binscL,dT,NX, l1, l2,theta):
     binscK = np.asarray(binscK)
     binscL = np.asarray(binscL)
     
-    TOTAL = [[0]*(Lobs+1)]*(Kobs+1)
+    TOTAL = [[0 for i in range(Lobs+1)] for j in range(Kobs+1)]
     for pxi0,xi0 in zip(p0_p, p0_xi):
         p1_p, p1_xi = pdfp1(xi0,dT,l1,l2,theta,NX)
         pKones = xi0**binscK*(1-xi0)**(Kobs-binscK)*pxi0
@@ -400,7 +400,7 @@ def generateSRAMPUFklonesdistribution(Kobs,Lobs,dT,l1,l2,theta,NX):
     p0_p, p0_xi = pdfp0(l1,l2,NX)
     binscK = np.asarray([k for k in range(Kobs+1)])
     binscL = np.asarray([l for l in range(Lobs+1)])
-    TOTAL = [[0]*(Lobs+1)]*(Kobs+1)
+    TOTAL = [[0 for i in range(Lobs+1)] for j in range(Kobs+1)]
     for pxi0,xi0 in zip(p0_p, p0_xi):
         p1_p, p1_xi = pdfp1(xi0,dT,l1,l2,theta,NX)
         pKones = comb(Kobs,binscK)*xi0**binscK*(1-xi0)**(Kobs-binscK)*pxi0
