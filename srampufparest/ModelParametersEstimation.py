@@ -1,23 +1,48 @@
-# BEGIN Functions for calculating the likelihood grid
-#def calculate_likelihoods(NX, K, L, dT, l1, l2,th):
-#    p0_p, p0_xi = pdfp0(l1,l2,NX)
-#            
-#    Pk1k2 = [[0]*(K+1) for k in range(K+1)]
-#    for k1 in range(K+1):
-#        for k2 in range(K+1):
-#            # outer integraal (p(x_1|..), given by p0_p,p0_xi)
-#            total = 0
-#            for (xi1,pdfxi1) in zip(p0_xi,p0_p):
-#                # inner integral
-#                p1_p, p1_xi = pdfp1(xi1,dT,l1,l2,th,NX)
-#                int2 = sum([(xi2**k2)*((1-xi2)**(K-k2))*pdfxi2 for (xi2,pdfxi2) in zip(p1_xi,p1_p)])
-#                # end inner integraal
-#                total = total+ pdfxi1*int2*(xi1**k1)*((1-xi1)**(K-k1))
-#                # end outer integraal
-#            Pk1k2[k1][k2] = total
-#    return Pk1k2
+# -*- coding: utf-8 -*-
+"""
+Created on Mon Dec 10 11:48:28 2018
 
+Here are all functions for generating and estimating parameters of the srampuf
+model.
 
+required packages: numpy, scipy, ipyparallel
+@author: lkusters
+"""
+
+# -----------------------------------------------------------------------
+#   Calculate pdf
+# -----------------------------------------------------------------------
+def pdfp0(l1,l2,NX):
+    # p0 as defined in SRAM-PUF model documentation
+    # parameters lambda1,lambda2 accuracy NX (approx stepsize 1/NX)
+    import numpy as np
+    from scipy.stats import norm
+    
+    xi = [i for i in np.linspace(0,1,NX)]
+    p0_p = np.diff( norm.cdf(l1*norm.ppf(xi)+l2) )
+    p0_xi = xi[:-1]+np.diff(xi)/2
+    
+    return p0_p, p0_xi
+  
+def pdfp1(xi1,dT,l1,l2,th,NX):
+    # p1(xi2|xi1,dT,..) as defined in SRAM-PUF model documentation
+    # parameters lambda1,lambda2, theta accuracy NX (approx stepsize 1/NX)
+    # dT is temperature difference
+    from scipy.stats import norm
+    import numpy as np
+    
+    xi = [i for i in np.linspace(0,1,NX)]
+    xi1 = [xi1]*len(xi)
+    yy = norm.cdf( (th/dT) * (norm.ppf(xi)-norm.ppf(xi1)) )  
+    p1_p = np.diff(yy)
+    p1_xi = xi[:-1]+np.diff(xi)/2
+    
+    return p1_p, p1_xi
+
+# -----------------------------------------------------------------------
+#   Calculate Log likelihoods
+# -----------------------------------------------------------------------
+    
 def loglikelihood_temperature(hist2D,binscK,binscL,dT,NX, l1, l2,theta):
     # calculate observations likelihood for two temperatures, 
     # given l1,l2, theta. Accuracy of pdf estimation is NX
@@ -60,76 +85,6 @@ def loglikelihood(hist,bins,NX, l1, l2):
             
     return logll
 
-# -----------------------------------------------------------------------
-#   Generate expected distribution of sum-counts
-# -----------------------------------------------------------------------
-    
-def pmfpkones(NX, l1, l2, K):
-    # calculate the distribution of observing k ones of K observations
-    # , given l1,l2
-    # Accuracy of pdf estimation is NX
-    # output is pdf
-    from scipy.special import comb
-    
-    p0_p, p0_xi = pdfp0(l1,l2,NX)
-    
-    pmf = [comb(K,k)*sum([p0*(xi**k)*((1-xi)**(K-k))\
-                                     for p0,xi in zip(p0_p, p0_xi)]) \
-            for k in range(K+1)]
-            
-    return pmf,[i for i in range(K+1)]
-
-def pmfpkones_temperature(NX, dT, l1, l2, theta, p1, L):
-    # calculate the distribution of observing l ones of L observations
-    # , given l1,l2, theta, dT (temperature difference), p1 (one-probability)
-    # at the other temperature
-    # Accuracy of pdf estimation is NX
-    # output is pdf
-    # this should match one-probability distribution at T=T1+dT of all cells 
-    # that have one probability p1 at temperature T1
-    from scipy.special import comb
-    
-    p1_p, p1_xi = pdfp1(p1,dT,l1,l2,theta,NX)
-    
-    pmf = [comb(L,l)*sum([p0*(xi**l)*((1-xi)**(L-l))\
-                                     for p0,xi in zip(p1_p, p1_xi)]) \
-            for l in range(L+1)]
-            
-    return pmf,[i for i in range(L+1)]
-
-# -----------------------------------------------------------------------
-#   Calculate pdf
-# -----------------------------------------------------------------------
-def pdfp0(l1,l2,NX):
-    # p0 as defined in SRAM-PUF model documentation
-    # parameters lambda1,lambda2 accuracy NX (approx stepsize 1/NX)
-    import numpy as np
-    from scipy.stats import norm
-    
-    #xx = [i for i in np.linspace(0,1,NX)]
-    #yy= [norm.cdf(l1*norm.ppf(xi)+l2) for xi in xx]
-    #p0_p = np.diff(yy)
-    #p0_xi = [x+0.5/NX for x in xx[:-1]]
-    xi = [i for i in np.linspace(0,1,NX)]
-    p0_p = np.diff( norm.cdf(l1*norm.ppf(xi)+l2) )
-    p0_xi = xi[:-1]+np.diff(xi)/2
-    
-    return p0_p, p0_xi
-  
-def pdfp1(xi1,dT,l1,l2,th,NX):
-    # p1(xi2|xi1,dT,..) as defined in SRAM-PUF model documentation
-    # parameters lambda1,lambda2, theta accuracy NX (approx stepsize 1/NX)
-    # dT is temperature difference
-    from scipy.stats import norm
-    import numpy as np
-    
-    xi = [i for i in np.linspace(0,1,NX)]
-    xi1 = [xi1]*len(xi)
-    yy = norm.cdf( (th/dT) * (norm.ppf(xi)-norm.ppf(xi1)) )  
-    p1_p = np.diff(yy)
-    p1_xi = xi[:-1]+np.diff(xi)/2
-    
-    return p1_p, p1_xi
 
 # -----------------------------------------------------------------------
 #   Parallel processing
@@ -161,24 +116,23 @@ def startworkers():
     srampuf_DV = dv
     return dv
 
+
 def loop_loglikelihood(hist,bins,NX, Lambdas1, Lambdas2):
     # calculate observations likelihood for one temperature,
     # given lists with Lambdas1,Lambdas2.
     # Accuracy of pdf estimation is NX
     # input is histogram of observed ones
     # output is loglikelihoods
-    # REQUIRED: conda: ipcluster start -n 4
     
-    dv = startworkers()
     LogLL = []
     for l1 in Lambdas1:
-        pr_list = dv.map_sync(loglikelihood, [hist]*len(Lambdas2), [bins]*len(Lambdas2), [NX]*len(Lambdas2), [l1]*len(Lambdas2),Lambdas2)
-        LogLL.append(pr_list)
+        LogLL.append([loglikelihood(hist,bins,NX, l1, l2) for l2 in Lambdas2])
+    
     print('Finished calculating log-likelihoods. Returning [L1 x L2] result'+\
           '[%d x %d]'%(len(Lambdas1),len(Lambdas2)))
     return LogLL
 
-def loop_loglikelihood_temperature(hist2D,bins1,bins2,dT,NX, Lambdas1, Lambdas2, Thetas):
+def loop_loglikelihood_temperature_givenl1l2(hist2D,bins1,bins2,dT,NX, l1, l2, Thetas):
     # calculate observations likelihood for two temperatures, 
     # given lists with Lambdas1,Lambdas2, Thetas.
     # Accuracy of pdf estimation is NX
@@ -187,72 +141,40 @@ def loop_loglikelihood_temperature(hist2D,bins1,bins2,dT,NX, Lambdas1, Lambdas2,
     # REQUIRED: conda: ipcluster start -n 4
     
     dv = startworkers()
+
+    LogLL = dv.map_sync(loglikelihood_temperature, [hist2D]*len(Thetas), [bins1]*len(Thetas), [bins2]*len(Thetas), [dT]*len(Thetas), [NX]*len(Thetas), [l1]*len(Thetas), [l2]*len(Thetas),Thetas)
     
-    LogLL = []
-    for theta in Thetas:
-        print('theta = {0}'.format(theta))
-        logll = []
-        for l1 in Lambdas1:
-            pr_list = dv.map_sync(loglikelihood_temperature, [hist2D]*len(Lambdas2), [bins1]*len(Lambdas2), [bins2]*len(Lambdas2), [dT]*len(Lambdas2), [NX]*len(Lambdas2), [l1]*len(Lambdas2), Lambdas2,[theta]*len(Lambdas2))
-            logll.append(pr_list)
-        LogLL.append(logll)
-    print('Finished calculating log-likelihoods. Returning [Theta x L1 x L2]'+\
-          ', [%d x %d x %d]'%(len(Thetas),len(Lambdas1),len(Lambdas2)))
+    print('Finished calculating log-likelihoods. Returning [Theta ]'+\
+          ', [%d ] result'%len(Thetas))
     return LogLL
 
-  
-# -----------------------------------------------------------------------
-#   Load data, and generate histograms
-# -----------------------------------------------------------------------
-def loadUnique(folderpath):
-    # folderpath : path of folder that has the data
-    # we assume 96 devices
-    # OUT
-    # observations : Ndevices x Nobservations x Ncells
-    # mergedobservations : Ncells x Nobservations
-    
-    import os
-    import numpy as np
-    
-    os.path.normpath(folderpath)
-    files = os.listdir(folderpath)
-    
-    observations = []
-    for device in range(96):
-        # take only files in this device
-        observations_dev = []
-        for filename in files:
-            if filename.startswith('Unique_dev%03d'%(device+1)):
-                filepath = os.path.normpath(folderpath+ '\\' +filename)
-                data =  np.fromfile(filepath, np.uint8)
-                data_bits = np.unpackbits(data)
-                observations_dev.append(data_bits)
-        observations.append(observations_dev)
-    (Ndevices,Nobservations,Ncells) = np.shape(observations)
-    
-    mergedobservations = np.reshape(np.swapaxes(observations,1,2),\
-                                    (Ncells*Ndevices,Nobservations))
-    
-    print('Finished loading data for %d devices, '%Ndevices+\
-          'with %d observations of '%Nobservations+\
-          '%d cells'%Ncells )
-    print('returning observations [%d,%d,%d] '%np.shape(observations)+\
-          'and merged observations [%d,%d]'%np.shape(mergedobservations))
-    return observations,mergedobservations
+# REMOVE THIS PARALLEL IMPLEMENTATION
+#def loop_loglikelihood_temperature(hist2D,bins1,bins2,dT,NX, Lambdas1, Lambdas2, Thetas):
+#    # calculate observations likelihood for two temperatures, 
+#    # given lists with Lambdas1,Lambdas2, Thetas.
+#    # Accuracy of pdf estimation is NX
+#    # input is 2D histogram of observed ones
+#    # output is loglikelihoods
+#    # REQUIRED: conda: ipcluster start -n 4
+#    
+#    dv = startworkers()
+#    
+#    LogLL = []
+#    for theta in Thetas:
+#        print('theta = {0}'.format(theta))
+#        logll = []
+#        for l1 in Lambdas1:
+#            pr_list = dv.map_sync(loglikelihood_temperature, [hist2D]*len(Lambdas2), [bins1]*len(Lambdas2), [bins2]*len(Lambdas2), [dT]*len(Lambdas2), [NX]*len(Lambdas2), [l1]*len(Lambdas2), Lambdas2,[theta]*len(Lambdas2))
+#            logll.append(pr_list)
+#        LogLL.append(logll)
+#    print('Finished calculating log-likelihoods. Returning [Theta x L1 x L2]'+\
+#          ', [%d x %d x %d]'%(len(Thetas),len(Lambdas1),len(Lambdas2)))
+#    return LogLL
 
-def loadData(filepath):
-    # folderpath : path of folder that has the data
-    # observations : Ncells x Nobservations
-    import numpy as np
+# -----------------------------------------------------------------------
+#   Get the Histograms
+# -----------------------------------------------------------------------
     
-    with open(filepath) as f:
-        content = f.readlines()
-    content = [x.strip() for x in content] 
-    content = [np.fromstring(x, dtype=int, count=-1, sep=',') for x in content]
-    content = np.swapaxes(content,0,1) # swap axes, s.t. 1st dim is cells, and second is observations
-    
-    return content
-
 def getcounts1D(observations):
     # observations : Ncells x Nobservations
     # calculate for each cell the number of ones
@@ -352,8 +274,8 @@ def readloglikelihoods(filename):
 #   Generate synthetic data
 # -----------------------------------------------------------------------
     
-def generateSRAMPUFparameters(Ndevices,Ncells,l1,l2,theta):
-    # generate the model parameters M,D for Ndevices with Ncells
+def generateSRAMPUFparameters(Ncells,l1,l2,theta):
+    # generate the model parameters M,D for Ncells
     # l1 = sigma_N/Sigma_M
     # l2 = (t-mu_M)/sigma_M
     # theta = sigma_N/sigma_D
@@ -363,37 +285,32 @@ def generateSRAMPUFparameters(Ndevices,Ncells,l1,l2,theta):
     muM = -l2/l1;
     sigmaD = 1/theta;
     
-    M = np.random.normal(loc=muM,scale=sigmaM,size=[Ndevices,Ncells])
-    D = np.random.normal(loc=0,scale=sigmaD,size=[Ndevices,Ncells])
-    print('Finished generating cell-parameters, ' +\
-          'with %d devices, and %d cells per device'%(Ndevices,Ncells) )
+    M = np.random.normal(loc=muM,scale=sigmaM,size=[Ncells])
+    D = np.random.normal(loc=0,scale=sigmaD,size=[Ncells])
+    print('Finished generating cell-parameters for ' +\
+          '%d cells'%(Ncells) )
     print('SETTINGS: mu_M = {0}, sigma_M = {1}'.format(muM,sigmaM))
     print('SETTINGS: mu_D = {0}, sigma_D = {1}'.format(0,sigmaD))
     return M,D
 
 def generateSRAMPUFobservations(M,D,Nobs,temperature):
     # generate measurements for the SRAMPUFs with parameters M,D
-    # We have Nobs at temperature 
+    # We have Nobs at given temperature 
     import numpy as np
     sigmaN = 1
     
     samples = []
-    for Mdev,Ddev in zip(M,D): # loop devices
-        samplesdev = []
-        for m,d in zip(Mdev,Ddev):
-            samplesdev.append(
-                    [1 if (i+m+d*temperature)>=0 else 0 for i in 
-                     np.random.normal(loc=0,scale=sigmaN,
-                                      size=Nobs)   ]   )
-        samples.append(samplesdev)
-    # also generate merged observations
-    Ndevices = len(M)
-    Ncells = len(M[0])
-    merged = np.reshape(samples,(Ncells*Ndevices,Nobs))
+
+    for m,d in zip(M,D):
+        samples.append(
+                [1 if (i+m+d*temperature)>=0 else 0 for i in 
+                 np.random.normal(loc=0,scale=sigmaN,
+                                  size=Nobs)   ]   )
+    Ncells = len(M)
     
-    print('Finished generating %d cell-observations for each device'%(Nobs) )
+    print('Finished generating %d cell-observations for %d cells'%(Nobs,Ncells) )
     print('SETTINGS: sigma_N = {0}'.format(sigmaN))
-    return samples,merged
+    return samples
    
 def generateSRAMPUFkonesdistribution(Kobs,l1,l2,NX):
     # generate synthetic histogram
@@ -421,3 +338,21 @@ def generateSRAMPUFklonesdistribution(Kobs,Lobs,dT,l1,l2,theta,NX):
         TOTAL += np.transpose(np.matlib.repmat(pKones,Lobs+1,1))*\
         np.matlib.repmat(pLones,Kobs+1,1)
     return TOTAL,binscK,binscL
+
+
+def generateSRAMPUFlonesdistribution(p1,Lobs,dT,l1,l2,theta,NX):
+    # calculate the distribution of observing l ones of L observations
+    # , given l1,l2, theta, dT (temperature difference), p1 (one-probability)
+    # at the other temperature
+    # Accuracy of pdf estimation is NX
+    # output is pdf
+    # this should match one-probability distribution at T=T1+dT of all cells 
+    # that have one probability p1 at temperature T1
+    from scipy.special import comb
+    
+    binscL = [l for l in range(Lobs+1)]
+    p1_p, p1_xi = pdfp1(p1,dT,l1,l2,theta,NX)
+    
+    pLones = [comb(Lobs,l)*sum(p1_xi**l*(1-p1_xi)**(Lobs-l)*p1_p) for l in binscL]
+            
+    return pLones,binscL
