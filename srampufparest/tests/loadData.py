@@ -13,19 +13,19 @@ folderpath = r'C:\Users\lkusters\surfdrive\python\temperature SRAM\data\SRAM\1'
 filepath = folderpath+r'\00_degrees_checked.txt_binary.txt'
 
 
-#counts = []
-#Ks = []
-#for i in range(0,60,5):
-#    filepath = folderpath+r'\%02d_degrees_checked.txt_binary.txt'%i
-#    print(filepath)
-#    data = srampufparest.loadData(filepath)
-#    counts.append([sum(d) for d in data])
-#    Ks.append(len(data[0]))
+counts = []
+Ks = []
+for i in range(0,60,5):
+    filepath = folderpath+r'\%02d_degrees_checked.txt_binary.txt'%i
+    print(filepath)
+    data = srampufparest.loadData(filepath)
+    counts.append([sum(d) for d in data])
+    Ks.append(len(data[0]))
 
 filename = 'counts_temperatures.txt'    
-#np.savetxt(filename, counts, delimiter=' ', newline='\n', header=\
-#                   'k-ones for each cell at different temperatures'+\
-#                   'K = %s'%(' '.join(map(str, Ks))), comments='# ')
+np.savetxt(filename, counts, delimiter=' ', newline='\n', header=\
+                   'k-ones for each cell at different temperatures'+\
+                   'K = %s'%(' '.join(map(str, Ks))), comments='# ')
                    
 counts = np.loadtxt(filename)
 temperature = np.asarray([i for i in range(0,60,5)])

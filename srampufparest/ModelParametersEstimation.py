@@ -315,12 +315,13 @@ def generateSRAMPUFobservations(M,D,Nobs,temperature):
 def generateSRAMPUFkonesdistribution(Kobs,l1,l2,NX):
     # generate synthetic histogram
     from scipy.special import comb
+    import numpy as np
     
     p0_p, p0_xi = pdfp0(l1,l2,NX)
     binscK = [k for k in range(Kobs+1)]
     pKones = [comb(Kobs,k)*sum(p0_xi**k*(1-p0_xi)**(Kobs-k)*p0_p) for k in binscK]
     
-    return pKones,binscK
+    return np.asarray(pKones),binscK
     
 def generateSRAMPUFklonesdistribution(Kobs,Lobs,dT,l1,l2,theta,NX):
     # generate synthetic histogram
